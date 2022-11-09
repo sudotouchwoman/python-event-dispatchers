@@ -8,7 +8,8 @@ from typing import Any, Callable, Optional
 
 logging.basicConfig(
     format="[%(asctime)s]::[%(name)s]::[%(threadName)s] - %(message)s",
-    level=logging.DEBUG
+    datefmt="%H:%M:%S",
+    level=logging.DEBUG,
 )
 
 
@@ -55,11 +56,12 @@ class DispatcherLoop:
         if self.__running:
             raise RuntimeError("already running dispatch")
         self.__running = True
-        threading.Thread(
+        self.__loop = threading.Thread(
             name=self.__name if self.__name else "dispatcher",
             target=self.__run_dispatch_loop,
             daemon=True,
-        ).start()
+        )
+        self.__loop.start()
 
     def stop(self) -> None:
         """Stops the loop by insertion of None item.
@@ -74,6 +76,9 @@ class DispatcherLoop:
         self.__done = True
         self.__requests.put(None)
 
+    def run_until_completed(self) -> None:
+        self.__loop.join()
+
     def submit(self, job: Any, timeout: Optional[float] = None) -> None:
         """Delegates a task to the loop. Tries to put item into the queue
 
@@ -86,21 +91,23 @@ class DispatcherLoop:
         """
         if self.__done:
             raise RuntimeError("cannot submit to a dead loop")
-        self.__requests.put(job, timeout=timeout)
+        self.__requests.put(job, timeout=timeout, block=False)
 
     def __run_dispatch_loop(self) -> None:
+        logging.debug(msg="starts loop")
         with ThreadPoolExecutor(max_workers=self.__max_workers) as executor:
             for _ in executor.map(
                 self.dispatch, iter(self.__requests.get, None)
             ):
                 self.__requests.task_done()
+        logging.debug(msg="...loop done")
 
 
 def dummy_producer(spawn_items: int = 10):
     logging.info(msg=f"I will produce {spawn_items} things and exit")
     for i in range(spawn_items):
-        message = f"message: {i**i}"
-        logging.info(msg=f"[{i}] spawned => {message}")
+        message = f"message: {i+i}"
+        logging.info(msg=f"[{i}] Spawner: {message}")
         yield message
         sleep(random.random())
     logging.info(msg="...producer done")
