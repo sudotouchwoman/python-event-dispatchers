@@ -20,7 +20,7 @@ def execute_task(task: Any) -> str:
     return f"{task} (completed)"
 
 
-class RobotAPI:
+class SimplePipeline:
     def __init__(self) -> None:
         # one pool (with big number of workers) for io-bound, non-blocking
         # tasks and another pool with single worker for execution
@@ -54,7 +54,7 @@ class RobotAPI:
         )
         self.final_consumer = ConsumerWithQueue(
             self.completed_tasks,
-            lambda task: logging.info(msg=f"Completed: {task}"),
+            lambda task: logging.info(msg=task),
             name="final-consumer",
         )
 
@@ -73,15 +73,15 @@ class RobotAPI:
 
     def run_until_complete(self) -> None:
         self.path_waiters_pool.run_until_complete()
-        self.execution_pool.run_until_complete()
         self.io_bound_consumer.stop()
+        self.execution_pool.run_until_complete()
         self.execution_consumer.stop()
         self.final_consumer.stop()
 
 
 def main() -> None:
 
-    api = RobotAPI()
+    api = SimplePipeline()
 
     for p in dummy_producer():
         api.schedule(p)

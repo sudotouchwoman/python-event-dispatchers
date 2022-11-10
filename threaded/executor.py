@@ -57,7 +57,7 @@ class WorkerPool:
         self.__done = True
         self.__requests.put(None)
         self.__loop.join()
-        logging.info(msg="Completed")
+        logging.info(msg=f"{self.__name} exited")
 
     def __dispatch_loop(self) -> None:
         logging.debug(msg="starts loop")
@@ -70,7 +70,7 @@ class WorkerPool:
                 executor.submit(job.routine).add_done_callback(
                     lambda f: job.result.put_nowait(f.result())
                 )
-        logging.info(msg=f"...{self.__name} done and exits")
+        logging.info(msg=f"...{self.__name} done")
 
 
 class ConsumerWithQueue:
