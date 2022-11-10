@@ -22,10 +22,10 @@ class WorkerPool:
         self.__requests: "queue.Queue[Optional[JobWithCb]]" = queue.Queue(
             maxsize=max_requests
         )
-        self.__name = name
+        self.__name = name if name else "worker-pool"
         self.__workers = max_workers
         self.__loop = threading.Thread(
-            name=self.__name if self.__name else "worker-pool",
+            name=self.__name,
             target=self.__dispatch_loop,
             daemon=True,
         )
@@ -61,43 +61,48 @@ class WorkerPool:
 
     def __dispatch_loop(self) -> None:
         logging.debug(msg="starts loop")
-        with ThreadPoolExecutor(max_workers=self.__workers) as executor:
+        with ThreadPoolExecutor(
+            max_workers=self.__workers,
+            thread_name_prefix=self.__name,
+        ) as executor:
             for job in iter(self.__requests.get, None):
                 self.__requests.task_done()
                 executor.submit(job.routine).add_done_callback(
                     lambda f: job.result.put_nowait(f.result())
                 )
-        logging.info(msg="...loop done")
+        logging.info(msg=f"...{self.__name} done and exits")
 
 
 class ConsumerWithQueue:
-    def __init__(self) -> None:
-        self.recieved = 0
+    def __init__(
+        self,
+        input_channel: queue.Queue[Any],
+        consumer_func: Callable[[Any], None],
+        name: str = "consumer-with-queue",
+    ) -> None:
+        self.recieved = []
+        self.__queue = input_channel
+        self.consume_task = consumer_func
         self.__lock = threading.Lock()
-        self.__queue = queue.Queue()
 
         def routine():
-            for thing in iter(self.__queue.get, None):
-                self.consume(thing)
+            for task in iter(self.__queue.get, None):
+                self.consume_task(task)
+                with self.__lock:
+                    self.recieved += [task]
                 self.__queue.task_done()
 
-            logging.debug(msg=f"Recieved total of {self.recieved}")
+            logging.debug(msg=f"Recieved in total: {len(self.recieved)}")
 
         threading.Thread(
             daemon=False,
-            name="consumer-with-queue",
+            name=name,
             target=routine,
         ).start()
 
     @property
     def queue(self) -> queue.Queue[Any]:
         return self.__queue
-
-    def consume(self, thing: Any) -> None:
-        # communicate with an external system...
-        with self.__lock:
-            logging.info(msg=f"[{self.recieved}] Consuming: {thing}")
-            self.recieved += 1
 
     def stop(self) -> None:
         self.__queue.put(None)

@@ -1,8 +1,8 @@
-from concurrent.futures import ThreadPoolExecutor
 import logging
 import queue
 import random
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 from typing import Any, Callable, Optional
 
@@ -106,11 +106,11 @@ class DispatcherLoop:
 def dummy_producer(spawn_items: int = 10):
     logging.info(msg=f"I will produce {spawn_items} things and exit")
     for i in range(spawn_items):
-        message = f"message: {i+i}"
+        message = f"{i}"
         logging.info(msg=f"[{i}] Spawner: {message}")
         yield message
         sleep(random.random())
-    logging.info(msg="...producer done")
+    logging.info(msg="...spawner done and exits")
 
 
 class Consumer:
