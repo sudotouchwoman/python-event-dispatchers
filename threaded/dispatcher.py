@@ -6,12 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 from typing import Any, Callable, Iterable, Optional
 
-logging.basicConfig(
-    format="[%(asctime)s]::[%(name)s]::[%(threadName)s] - %(message)s",
-    datefmt="%H:%M:%S",
-    level=logging.DEBUG,
-)
-
 
 class Stateful:
     def __init__(self, state: Any) -> None:
