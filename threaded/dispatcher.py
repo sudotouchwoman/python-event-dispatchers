@@ -4,7 +4,7 @@ import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from time import sleep
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 logging.basicConfig(
     format="[%(asctime)s]::[%(name)s]::[%(threadName)s] - %(message)s",
@@ -103,12 +103,11 @@ class DispatcherLoop:
         logging.debug(msg="...loop done")
 
 
-def dummy_producer(spawn_items: int = 10):
+def dummy_producer(spawn_items: int = 10) -> Iterable[int]:
     logging.info(msg=f"I will produce {spawn_items} things and exit")
     for i in range(spawn_items):
-        message = f"{i}"
-        logging.info(msg=f"[{i}] Spawner: {message}")
-        yield message
+        logging.info(msg=f"[{i}] Spawner: {i}")
+        yield i
         sleep(random.random())
     logging.info(msg="...spawner done and exits")
 
