@@ -11,11 +11,11 @@ class AgentExecutor:
 
     @contextmanager
     def client(self) -> Iterator[MqttClient]:
-        with self.__state(State.BUSY):
+        with self.__state.mutate(State.BUSY):
             yield self.__client
 
     def reach_destination(self, dest: Any) -> None:
         # probably communicate with external component here
-        with self.__state(State.MOVING):
+        with self.__state.mutate(State.MOVING):
             # network communication, etc
             pass

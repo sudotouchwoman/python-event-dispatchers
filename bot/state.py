@@ -88,7 +88,28 @@ class StateManager:
         return nonblock_guard(self.__mission_lock)
 
     @contextmanager
-    def __call__(
+    def attach(
+        self,
+        state: State,
+        blocking: bool = True,
+        timeout: float = -1,
+    ) -> Iterator[None]:
+        # interface for state mutations
+        # ensures that code inside this context
+        # runs in correct state
+        with self.__context_lock.read(blocking=blocking, timeout=timeout):
+            if self.__current_state == state:
+                self.__add_holder()
+                try:
+                    yield
+                finally:
+                    self.__drop_holder()
+                    self.__clear_state()
+                return
+            raise AquiredStateError("can only attech to existing context")
+
+    @contextmanager
+    def mutate(
         self,
         state: State,
         blocking: bool = True,

@@ -20,21 +20,18 @@ def main():
         s: State,
         sleep_for: float = 0,
         timeout: float = -1,
-        blocking: bool = True,
+        mutate: bool = True,
     ):
         try:
-            with m(s, blocking=blocking, timeout=timeout):
+            accessor = (
+                lambda: m.mutate(s, timeout=timeout)
+                if mutate
+                else m.attach(s, timeout=timeout)
+            )
+            with accessor():
                 logging.debug(msg=f"In state {m.state}, holders: {m.holders}")
                 sleep(sleep_for)
-                goto_error = sleep_for % 2 == 1
                 logging.debug(msg="Leaving context")
-            if not goto_error:
-                return
-            logging.debug(msg="Tries to enter Error mode")
-            with m(State.ERROR, blocking=blocking, timeout=timeout):
-                logging.debug(msg="Entered Error mode")
-                sleep(sleep_for)
-                logging.debug(msg="Leaving Error mode")
         except AquiredStateError as e:
             logging.error(f"Error with context: {e}")
         except WouldBlockError as e:
@@ -42,10 +39,10 @@ def main():
 
     def thread_generator():
         yield lambda: goto_state(State.MOVING, 3)
-        yield lambda: goto_state(State.MOVING, 5, blocking=False)
-        yield lambda: goto_state(State.IDLE, 5, blocking=False)
-        yield lambda: goto_state(State.BUSY, 5, 7)
-        yield lambda: goto_state(State.IDLE, 2, blocking=False)
+        yield lambda: goto_state(State.MOVING, 5, mutate=False)
+        yield lambda: goto_state(State.IDLE, 5, mutate=False)
+        yield lambda: goto_state(State.BUSY, 5, 1)
+        yield lambda: goto_state(State.IDLE, 2, mutate=False)
 
     for t in map(
         lambda name, target: threading.Thread(target=target, name=name),
