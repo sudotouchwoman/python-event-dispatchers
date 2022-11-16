@@ -161,13 +161,6 @@ class AtomicCounter:
 
 
 class StateReducer:
-    requests: queue.Queue[Optional[State]]
-    # requests: queue.Queue[Optional[Tuple[State, Future[None]]]]
-    closers: queue.Queue[State]
-    confirms: queue.Queue[bool]
-    current_state: State
-    holders_cnt: AtomicCounter
-
     def __init__(self, initial_state: State = State.IDLE) -> None:
         self.holders_cnt = AtomicCounter()
 
