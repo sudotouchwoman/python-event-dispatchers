@@ -2,8 +2,10 @@
 import logging
 import threading
 from time import sleep
+from typing import Optional
 from bot import WouldBlockError
-from bot.state import AquiredStateError, StateManager, State
+from bot.state import AquiredStateError, State
+from bot.transactions import StateReducer
 
 
 logging.basicConfig(
@@ -14,93 +16,51 @@ logging.basicConfig(
 
 
 def main():
-    m = StateManager()
+    m = StateReducer()
 
     def goto_state(
         s: State,
         sleep_for: float = 0,
-        timeout: float = -1,
-        mutate: bool = True,
+        timeout: Optional[float] = None,
+        blocking: bool = True,
     ):
         try:
+            # attach is performed in a non-blocking manner
+            # though will borrow the state if it does match
+            # while mutate will try to perform a transaction
             accessor = (
                 lambda: m.mutate(s, timeout=timeout)
-                if mutate
-                else m.attach(s, timeout=timeout)
+                if blocking
+                else m.attach(s)
             )
             with accessor():
                 logging.debug(msg=f"In state {m.state}, holders: {m.holders}")
                 sleep(sleep_for)
-                logging.debug(msg="Leaving context")
+                logging.debug(msg="Leaving")
         except AquiredStateError as e:
-            logging.error(f"Error with context: {e}")
+            logging.error(f"Error with state: {e}")
         except WouldBlockError as e:
             logging.error(f"Would have blocked: {e}")
 
     def thread_generator():
+        # blocking routines would try to mutate the state
+        # while non-blocking would only try to peek
         yield lambda: goto_state(State.MOVING, 3)
-        yield lambda: goto_state(State.MOVING, 5, mutate=False)
-        yield lambda: goto_state(State.IDLE, 5, mutate=False)
+        yield lambda: goto_state(State.MOVING, 5, blocking=False)
+        yield lambda: goto_state(State.IDLE, 5, blocking=False)
         yield lambda: goto_state(State.BUSY, 5, 1)
-        yield lambda: goto_state(State.IDLE, 2, mutate=False)
+        yield lambda: goto_state(State.IDLE, 2, blocking=False)
+        yield lambda: goto_state(State.IDLE, 5)
 
     for t in map(
         lambda name, target: threading.Thread(target=target, name=name),
-        "ABCDE",
+        "ABCDEF",
         thread_generator(),
     ):
         t.start()
-        sleep(0.5)
+        sleep(1)
 
-    # m.run_until_complete()
-    # threading.Thread(
-    #     name="A",
-    #     target=lambda: goto_state(State.MOVING, 3),
-    # ).start()
-    # threading.Thread(
-    #     name="B",
-    #     target=lambda: goto_state(State.MOVING, 5, blocking=False),
-    # ).start()
-    # threading.Thread(
-    #     name="C",
-    #     target=lambda: goto_state(State.IDLE, 5, blocking=False),
-    # ).start()
-    # threading.Thread(
-    #     name="E",
-    #     target=lambda: goto_state(State.BUSY, 5, 7),
-    # ).start()
-    # sleep(8)
-    # threading.Thread(
-    #     name="D",
-    #     target=lambda: goto_state(State.IDLE, 2, blocking=False),
-    # ).start()
-    # with ThreadPoolExecutor() as executor:
-    #     futures = []
-    #     for f in thread_generator():
-    #         futures.append(executor.submit(f))
-    #     for _ in as_completed(futures):
-    #         pass
-    # threading.Thread(
-    #     name="A",
-    #     target=lambda: goto_state(State.MOVING, 3),
-    # ).start()
-    # threading.Thread(
-    #     name="B",
-    #     target=lambda: goto_state(State.MOVING, 5, blocking=False),
-    # ).start()
-    # threading.Thread(
-    #     name="C",
-    #     target=lambda: goto_state(State.IDLE, 5, blocking=False),
-    # ).start()
-    # threading.Thread(
-    #     name="E",
-    #     target=lambda: goto_state(State.BUSY, 5, 7),
-    # ).start()
-    # sleep(8)
-    # threading.Thread(
-    #     name="D",
-    #     target=lambda: goto_state(State.IDLE, 2, blocking=False),
-    # ).start()
+    m.run_until_complete()
 
 
 if __name__ == "__main__":
