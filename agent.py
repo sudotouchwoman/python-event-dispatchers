@@ -3,7 +3,7 @@ import logging
 import threading
 from time import sleep
 from bot import WouldBlockError
-from bot.state import AquiredStateError, StateReducer, State
+from bot.state import AquiredStateError, StateManager, State
 
 
 logging.basicConfig(
@@ -14,12 +14,12 @@ logging.basicConfig(
 
 
 def main():
-    m = StateReducer()
+    m = StateManager()
 
     def goto_state(
         s: State,
         sleep_for: float = 0,
-        timeout: float = 0.0,
+        timeout: float = -1,
         blocking: bool = True,
     ):
         try:
@@ -55,7 +55,7 @@ def main():
         t.start()
         sleep(0.5)
 
-    m.run_until_complete()
+    # m.run_until_complete()
     # threading.Thread(
     #     name="A",
     #     target=lambda: goto_state(State.MOVING, 3),
