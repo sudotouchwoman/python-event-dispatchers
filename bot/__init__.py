@@ -51,8 +51,9 @@ class RWLock:
     def read(
         self, blocking: bool = True, timeout: float = -1
     ) -> Iterator[None]:
+        if not self.r_acquire(blocking, timeout):
+            raise WouldBlockError
         try:
-            self.r_acquire(blocking, timeout)
             yield
         finally:
             self.r_release()
