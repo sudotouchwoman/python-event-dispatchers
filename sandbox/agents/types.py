@@ -29,12 +29,17 @@ class AgentStateAPI(ABC):
 
 
 class AgentHooksAPI(ABC):
+    def next_task(self):
+        # block until the next task is decoded
+        # and can be parsed into subtasks
+        pass
+
     def next_subtask(self):
         # blocks until next subtask is decoded
         # and can be run
         pass
 
-    def next_chunk(self):
+    def fetch_next_chunk(self):
         # blocks until next chunk is requested
         # SM will ping path_found property
         # after this one is called

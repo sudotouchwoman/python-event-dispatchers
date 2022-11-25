@@ -15,23 +15,23 @@ class Dispatcher:
 
     def dispatch_next(self, event: Callable[[], None]):
         self.do_io_actions()
-        log.debug("dispatches request")
+        # log.debug("dispatches request")
         event()
-        log.debug("request done")
+        # log.debug("request done")
 
     def do_io_actions(self):
         self.io_requests.put(None)
         for r in iter(self.io_requests.get, None):
             self.io_requests.task_done()
-            log.debug("io-bound do")
+            # log.debug("io-bound do")
             r()
-            log.debug("io-bound done")
+            # log.debug("io-bound done")
 
     def loop(self):
         # runs in separate thread, the sacred
         # request loop
         for r in iter(self.state_requests.get, None):
-            log.debug("dispatching...")
+            # log.debug("dispatching...")
             self.state_requests.task_done()
             self.dispatch_next(r)
 
