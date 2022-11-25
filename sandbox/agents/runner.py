@@ -4,7 +4,10 @@ from time import sleep
 from typing import Callable
 from statemachine import State, StateMachine
 
-from .types import AgentAPI, Submitter
+from .types import AgentHooksAPI, AgentStateAPI, Submitter
+
+log = logging.getLogger(__name__)
+
 
 # FA initiates io-bound tasks, but does not block
 # inside states
@@ -54,7 +57,8 @@ class AgentFSM(StateMachine):
     got_path = awaits_path.to(moving)
     dest_not_reached = moving.to.itself()
     dest_reached = moving.to(new_subtask)
-    do_action = new_subtask.to(executing) | executing.to.itself()
+    do_exec_actions = new_subtask.to(executing)
+    do_action = executing.to.itself()
     done_action = executing.to(new_subtask)
     done_subtask = new_subtask.to(new_task)
     done_task = new_task.to(idle)
@@ -70,17 +74,23 @@ class AgentFSM(StateMachine):
 
 
 class ConfiguredAgent(AgentFSM):
-    api: AgentAPI
+    hooks_api: AgentHooksAPI
+    state_api: AgentStateAPI
     io_sub: Submitter
     state_sub: Submitter
 
     def __init__(
-        self, api: AgentAPI, io_sub: Submitter, state_sub: Submitter
+        self,
+        hooks: AgentHooksAPI,
+        state: AgentStateAPI,
+        io_sub: Submitter,
+        state_sub: Submitter,
     ) -> None:
         super().__init__()
         self.io_sub = io_sub
         self.state_sub = state_sub
-        self.api = api
+        self.state_api = state
+        self.hooks_api = hooks
 
     def wants_state(self, tr: Callable[[], None]):
         self.state_sub.submit(tr)
@@ -89,102 +99,120 @@ class ConfiguredAgent(AgentFSM):
         self.io_sub.submit(hook)
 
     def on_enter_initial(self):
-        logging.debug("Agent done")
+        log.debug("Agent done")
 
     def on_start(self):
-        logging.debug("Starts operation")
-        self.wants_run(self.api.listen_for_tasks)
+        log.debug("Starts operation")
+        self.wants_run(self.hooks_api.listen_for_tasks)
+
+    def on_stop(self):
+        log.debug("Stops loop")
+        self.wants_run(self.hooks_api.suspend)
 
     def on_enter_idle(self):
-        logging.debug("idle")
-        if self.api.more_tasks:
+        log.debug("idle")
+        if self.state_api.more_tasks:
             self.wants_state(self.submit_task)
+            return
+        if self.state_api.error_found:
+            self.wants_state(self.got_error)
+            return
+        if self.state_api.must_stop:
+            self.wants_state(self.stop)
             return
         self.wants_state(self.ping_idle)
 
     def on_submit_task(self):
-        logging.debug("fetch next subtask from tuple")
-        self.wants_run(self.api.next_subtask)
+        log.debug("fetch next subtask from tuple")
+        self.wants_run(self.hooks_api.next_subtask)
 
     def on_ping_idle(self):
-        logging.debug("will sleep for a second while idle")
+        log.debug("will sleep for a second while idle")
         self.wants_run(lambda: sleep(1))
+        self.wants_run(self.hooks_api.listen_for_tasks)
 
     def on_enter_new_task(self):
-        logging.debug("new task")
-        if self.api.more_subtasks:
+        log.debug("new task")
+        if self.state_api.more_subtasks:
             self.wants_state(self.submit_subtask)
             return
         self.wants_state(self.done_task)
 
     def on_submit_subtask(self):
-        logging.debug("submits dest reached check")
-        self.wants_run(self.api.check_dest_reached)
+        log.debug("submits dest reached check")
+        self.wants_run(self.hooks_api.check_dest_reached)
 
     def on_enter_new_subtask(self):
-        logging.debug("new subtask")
-        if not self.api.dest_reached:
+        log.debug("new subtask")
+        if not self.state_api.dest_reached:
             self.wants_state(self.wait_for_path)
             return
-        if self.api.more_exec_actions:
-            self.wants_state(self.do_action)
+        if self.state_api.more_exec_actions:
+            self.wants_state(self.do_exec_actions)
             return
+        log.debug("done subtask")
         self.wants_state(self.done_subtask)
 
     def on_wait_for_path(self):
-        logging.debug("looks for a next chuck")
-        self.wants_run(self.api.next_chunk)
+        log.debug("looks for a next chuck")
+        self.wants_run(self.hooks_api.next_chunk)
 
     def on_enter_awaits_path(self):
-        logging.debug("pings for next chunk")
-        if self.api.path_found:
+        log.debug("pings for next chunk")
+        if self.state_api.path_found:
             self.wants_state(self.got_path)
             return
         self.wants_state(self.ping_sleep)
 
     def on_ping_sleep(self):
-        logging.debug("sleeps before next ping")
+        log.debug("sleeps before next ping")
         self.wants_run(lambda: sleep(1))
 
     def on_got_path(self):
-        logging.debug("will fetch move instructions")
-        self.wants_run(self.api.send_move_action)
+        log.debug("will fetch move instructions")
+        self.wants_run(self.hooks_api.send_move_action)
 
     def on_enter_moving(self):
-        logging.debug("starts moving")
-        if self.api.more_path_actions:
+        log.debug("starts moving")
+        if self.state_api.more_path_actions:
             self.wants_state(self.dest_not_reached)
             return
         self.wants_state(self.dest_reached)
 
     def on_dest_not_reached(self):
-        logging.debug("will send another move instruction")
-        self.wants_run(self.api.send_move_action)
+        log.debug("will send another move instruction")
+        self.wants_run(self.hooks_api.send_move_action)
 
     def on_dest_reached(self):
-        logging.debug("current chunk sent, checks if reached dest")
-        self.wants_run(self.api.check_dest_reached)
+        log.debug("current chunk sent, checks if reached dest")
+        self.wants_run(self.hooks_api.check_dest_reached)
 
     def on_enter_executing(self):
-        logging.debug("execution stage")
-        if self.api.more_exec_actions:
+        log.debug("execution stage")
+        more_exec_actions = self.state_api.more_exec_actions
+        log.debug(f"{more_exec_actions} more to do")
+        if more_exec_actions > 0:
             self.wants_state(self.do_action)
             return
+        log.debug("done exec")
         self.wants_state(self.done_action)
 
+    def on_do_exec_actions(self):
+        log.debug("will execute actions")
+
     def on_do_action(self):
-        logging.debug("will trigger action exec")
-        self.wants_run(self.api.send_exec_action)
+        log.debug("will trigger action exec")
+        self.wants_run(self.hooks_api.send_exec_action)
 
     def on_done_action(self):
-        logging.debug("all actions done")
+        log.debug("all actions done")
 
     def on_subtask_done(self):
-        logging.debug("subtask completed")
-        self.wants_run(self.api.next_subtask)
+        log.debug("subtask completed")
+        self.wants_run(self.hooks_api.next_subtask)
 
     def on_task_done(self):
-        logging.debug("task done")
+        log.debug("task done")
 
     def on_enter_error(self):
-        logging.debug("error found")
+        log.debug("error found")

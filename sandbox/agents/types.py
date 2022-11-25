@@ -1,9 +1,12 @@
 from abc import ABC
-import queue
+import logging
 from typing import Callable
 
 
-class AgentAPI(ABC):
+log = logging.getLogger(__name__)
+
+
+class AgentStateAPI(ABC):
     """Agent APi acts as a narrowed
     interface for the actual agent
 
@@ -16,12 +19,16 @@ class AgentAPI(ABC):
     """
 
     more_tasks: bool
-    more_subtasks: bool
-    more_exec_actions: bool
-    more_path_actions: bool
+    more_subtasks: int
+    more_exec_actions: int
+    more_path_actions: int
     path_found: bool
     dest_reached: bool
+    error_found: bool
+    must_stop: bool
 
+
+class AgentHooksAPI(ABC):
     def next_subtask(self):
         # blocks until next subtask is decoded
         # and can be run
@@ -52,36 +59,13 @@ class AgentAPI(ABC):
         # block until next move command is executed
         pass
 
+    def suspend(self):
+        # stop processing events
+        pass
+
 
 class Submitter:
     def submit(self, hook: Callable[[], None]):
         # non-blocking method
         # puts hook into the queue
         pass
-
-
-class Dispatcher:
-    state_requests: queue.Queue
-    io_requests: queue.Queue
-
-    def __init__(self) -> None:
-        self.state_requests = queue.Queue()
-        self.io_requests = queue.Queue()
-
-    def dispatch_next(self, event: Callable[[], None]):
-        self.do_io_actions()
-        event()
-
-    def do_io_actions(self):
-        self.io_requests.put(None)
-        for r in iter(self.io_requests.get, None):
-            r()
-
-    def loop(self):
-        # runs in separate thread, the sacred
-        # request loop
-        for r in iter(self.state_requests.get, None):
-            self.dispatch_next(r)
-
-    def stop(self):
-        self.state_requests.put(None)
