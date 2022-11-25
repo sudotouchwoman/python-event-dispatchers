@@ -1,9 +1,9 @@
-from enum import Enum, unique
 import logging
 from time import sleep
 from typing import Callable
 from statemachine import State, StateMachine
 
+from . import States
 from .types import AgentHooksAPI, AgentStateAPI, Submitter
 
 log = logging.getLogger(__name__)
@@ -15,20 +15,6 @@ log = logging.getLogger(__name__)
 # once transition is complete, runner blocks on io-bound tasks
 # after all io-bound tasks are completed, a new state is picked from
 # the queue
-
-
-@unique
-class States(str, Enum):
-    INITIAL = "off"
-    IDLE = "idle"
-    POWERSAVE = "powersave"
-    GOT_TASK = "new_task"
-    GOT_SUBTASK = "new_subtask"
-    AWAIT_PATH = "awaits_path"
-    MOVING = "moving"
-    EXECUTING = "executing"
-    ERROR = "error"
-
 
 class AgentFSM(StateMachine):
     """Defines states and transitions for robot agent"""

@@ -1,3 +1,4 @@
+from enum import Enum, unique
 import logging
 
 
@@ -10,3 +11,16 @@ formatter = logging.Formatter(
 )
 handler.setFormatter(formatter)
 log.addHandler(handler)
+
+
+@unique
+class States(str, Enum):
+    INITIAL = "off"
+    IDLE = "idle"
+    POWERSAVE = "powersave"
+    GOT_TASK = "new_task"
+    GOT_SUBTASK = "new_subtask"
+    AWAIT_PATH = "awaits_path"
+    MOVING = "moving"
+    EXECUTING = "executing"
+    ERROR = "error"

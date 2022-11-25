@@ -6,7 +6,7 @@ import threading
 from time import sleep
 from typing import Callable, List, Optional
 
-from .runner import States
+from . import States
 from .types import AgentStateAPI, AgentHooksAPI, Submitter
 from .dispatcher import Dispatcher
 

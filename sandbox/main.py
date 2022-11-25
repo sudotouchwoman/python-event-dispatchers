@@ -1,6 +1,6 @@
 import threading
 from time import sleep
-from agents.runner import ConfiguredAgent
+from agents.machine import ConfiguredAgent
 from agents.agent import AgentLoop, Locations, MockAgent, SubTask, Task
 
 
