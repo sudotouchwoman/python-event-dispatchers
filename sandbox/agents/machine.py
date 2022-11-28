@@ -4,9 +4,7 @@ from typing import Callable
 from statemachine import State, StateMachine
 
 from . import States
-from .types import AgentHooksAPI, AgentStateAPI, Submitter
-
-log = logging.getLogger(__name__)
+from .types import AgentAction, AgentState, Submitter
 
 
 # FA initiates io-bound tasks, but does not block
@@ -15,6 +13,7 @@ log = logging.getLogger(__name__)
 # once transition is complete, runner blocks on io-bound tasks
 # after all io-bound tasks are completed, a new state is picked from
 # the queue
+
 
 class AgentFSM(StateMachine):
     """Defines states and transitions for robot agent"""
@@ -60,15 +59,19 @@ class AgentFSM(StateMachine):
 
 
 class ConfiguredAgent(AgentFSM):
-    hooks_api: AgentHooksAPI
-    state_api: AgentStateAPI
+    """State machine configured with callbacks and
+    additional attributes.
+    """
+
+    actions_api: AgentAction
+    state_api: AgentState
     io_sub: Submitter
     state_sub: Submitter
 
     def __init__(
         self,
-        hooks: AgentHooksAPI,
-        state: AgentStateAPI,
+        hooks: AgentAction,
+        state: AgentState,
         io_sub: Submitter,
         state_sub: Submitter,
     ) -> None:
@@ -76,90 +79,102 @@ class ConfiguredAgent(AgentFSM):
         self.io_sub = io_sub
         self.state_sub = state_sub
         self.state_api = state
-        self.hooks_api = hooks
+        self.actions_api = hooks
+        self.log = logging.getLogger(__name__)
 
-    def do(self, tr: Callable[[], None]):
+    def transit_state(self, tr: Callable[[], None]):
+        """Short-hand method for submitting state.
+
+        Args:
+            tr (Callable[[], None]): valid state transition
+            method of parent state machine
+        """
         self.state_sub.submit(tr)
 
-    def schedule(self, hook: Callable[[], None]):
-        self.io_sub.submit(hook)
+    def do_action(self, action: Callable[[], None]):
+        """Short-hand method for submitting actions.
+
+        Args:
+            tr (Callable[[], None]): valid action
+            method of action API or just a callback
+        """
+        self.io_sub.submit(action)
 
     def on_enter_initial(self):
-        log.debug("Agent done")
+        self.log.debug("Agent done")
 
     def on_enter_idle(self):
-        log.debug("looking for tasks")
+        self.log.debug("idle")
         if self.state_api.more_tasks:
-            log.debug("fetch next task")
-            self.do(self.submit_task)
+            self.log.debug("fetch next task")
+            self.transit_state(self.submit_task)
             return
         if self.state_api.error_found:
-            self.do(self.got_error)
+            self.transit_state(self.got_error)
             return
         if self.state_api.must_stop:
-            log.debug("Stops loop")
-            self.do(self.stop)
-            self.schedule(self.hooks_api.suspend)
+            self.log.debug("Stops loop")
+            self.transit_state(self.stop)
+            self.do_action(self.actions_api.suspend)
             return
-        log.debug("will sleep for a second while idle")
-        self.do(self.ping_idle)
-        self.schedule(self.hooks_api.listen_for_tasks)
+        self.transit_state(self.ping_idle)
+        self.do_action(self.actions_api.listen_for_tasks)
 
     def on_enter_new_task(self):
         left = self.state_api.more_subtasks
-        log.debug(f"{left} subtasks left")
+        self.log.debug(f"{left} subtasks left")
         if left > 0:
-            log.debug("submits dest reached check")
-            self.do(self.submit_subtask)
-            self.schedule(self.hooks_api.next_subtask)
-            self.schedule(self.hooks_api.check_dest_reached)
+            self.log.debug("submits dest reached check")
+            self.transit_state(self.submit_subtask)
+            self.do_action(self.actions_api.next_subtask)
+            self.do_action(self.actions_api.check_dest_reached)
             return
-        log.debug("task completed")
-        self.do(self.done_task)
-        self.schedule(self.hooks_api.next_task)
+        self.log.debug("task completed")
+        self.transit_state(self.done_task)
+        self.do_action(self.actions_api.done_task)
 
     def on_enter_new_subtask(self):
         if not self.state_api.dest_reached:
-            log.debug("looks for a next chuck")
-            self.do(self.wait_for_path)
-            self.schedule(self.hooks_api.fetch_next_chunk)
+            self.log.debug("looks for a next chuck")
+            self.transit_state(self.wait_for_path)
+            self.do_action(self.actions_api.fetch_next_chunk)
             return
         if self.state_api.more_exec_actions:
-            log.debug("will execute actions")
-            self.do(self.execute_actions)
+            self.log.debug("will execute actions")
+            self.transit_state(self.execute_actions)
             return
-        log.debug("subtask completed")
-        self.do(self.done_subtask)
+        self.log.debug("subtask completed")
+        self.transit_state(self.done_subtask)
 
     def on_enter_awaits_path(self):
         if self.state_api.path_found:
-            # log.debug("will fetch move instructions")
-            self.do(self.start_moving)
+            # self.log.debug("will fetch move instructions")
+            self.transit_state(self.start_moving)
             return
-        log.debug("pings for next chunk")
-        self.do(self.ping_sleep)
-        self.schedule(lambda: sleep(1))
+        self.log.debug("pings for next chunk")
+        self.transit_state(self.ping_sleep)
+        self.do_action(lambda: sleep(1))
 
     def on_enter_moving(self):
         if self.state_api.more_path_actions:
-            log.debug("starts moving")
-            self.do(self.dest_not_reached)
-            self.schedule(self.hooks_api.send_move_action)
+            self.log.debug("starts moving")
+            self.transit_state(self.dest_not_reached)
+            self.do_action(self.actions_api.send_move_action)
             return
-        log.debug("current chunk sent, checks if reached dest")
-        self.do(self.dest_reached)
-        self.schedule(self.hooks_api.check_dest_reached)
+        self.log.debug("current chunk sent, checks if reached dest")
+        self.transit_state(self.dest_reached)
+        self.do_action(self.actions_api.check_dest_reached)
 
     def on_enter_executing(self):
         left = self.state_api.more_exec_actions
-        log.debug(f"{left} more exec left to do")
+        self.log.debug(f"{left} more exec left to do")
         if left > 0:
-            # log.debug("will trigger action exec")
-            self.do(self.execute_more)
-            self.schedule(self.hooks_api.send_exec_action)
+            # self.log.debug("will trigger action exec")
+            self.transit_state(self.execute_more)
+            self.do_action(self.actions_api.send_exec_action)
             return
-        log.debug("done exec")
-        self.do(self.execute_done)
+        self.log.debug("done exec")
+        self.transit_state(self.execute_done)
 
     def on_enter_error(self):
-        log.debug("error found")
+        self.log.debug("error found")
