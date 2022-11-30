@@ -83,7 +83,7 @@ class ConfiguredAgent(AgentFSM):
         self.log = logging.getLogger(__name__)
 
     def transit_state(self, tr: Callable[[], None]):
-        """Short-hand method for submitting state.
+        """Shorthand method for submitting state.
 
         Args:
             tr (Callable[[], None]): valid state transition
@@ -92,7 +92,7 @@ class ConfiguredAgent(AgentFSM):
         self.state_sub.submit(tr)
 
     def do_action(self, action: Callable[[], None]):
-        """Short-hand method for submitting actions.
+        """Shorthand method for submitting actions.
 
         Args:
             tr (Callable[[], None]): valid action

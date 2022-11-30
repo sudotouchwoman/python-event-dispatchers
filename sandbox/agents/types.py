@@ -1,33 +1,5 @@
-from abc import ABC
-from typing import List
-from dataclasses import dataclass
-from enum import Enum, unique
-from typing import Callable
-
-
-@unique
-class Locations(str, Enum):
-    BASE = "base"
-    LEVEL2 = "level 2"
-    LEVEL3 = "level 3"
-
-
-@dataclass
-class SubTask:
-    loc: Locations
-    commands: List[str]
-
-
-@dataclass
-class Task:
-    subtasks: List[SubTask]
-
-    def next(self) -> SubTask:
-        return self.subtasks.pop(0)
-
-    @property
-    def done(self) -> bool:
-        return len(self.subtasks) == 0
+from abc import ABC, abstractmethod
+from typing import Any, Callable
 
 
 class AgentState:
@@ -63,6 +35,7 @@ class AgentAction(ABC):
     are expected to block.
     """
 
+    @abstractmethod
     def done_task(self):
         """
         Called once current task is completed so that
@@ -70,6 +43,7 @@ class AgentAction(ABC):
         attributes.
         """
 
+    @abstractmethod
     def next_subtask(self):
         """
         Called when new task is recieved/a subtask have just been
@@ -77,6 +51,7 @@ class AgentAction(ABC):
         subtask.
         """
 
+    @abstractmethod
     def fetch_next_chunk(self):
         """
         Called when current location
@@ -85,12 +60,14 @@ class AgentAction(ABC):
         until new chunk is recieved.
         """
 
+    @abstractmethod
     def listen_for_tasks(self):
         """
         Listen for incoming task requests. May block, but
         not forever so that error requests could be processed too.
         """
 
+    @abstractmethod
     def check_dest_reached(self):
         """
         Called for each subtask/chunk. Implementations MUST
@@ -98,6 +75,7 @@ class AgentAction(ABC):
         `dest_reached` property is up-to-date.
         """
 
+    @abstractmethod
     def send_move_action(self):
         """
         Called for each move action obtained from chunk.
@@ -106,6 +84,7 @@ class AgentAction(ABC):
         up-to-date.
         """
 
+    @abstractmethod
     def send_exec_action(self):
         """
         Called for each execution stage action in subtask.
@@ -114,6 +93,7 @@ class AgentAction(ABC):
         up-to-date.
         """
 
+    @abstractmethod
     def suspend(self):
         """
         Unconditionally stop processing requests.
@@ -123,7 +103,8 @@ class AgentAction(ABC):
 
 
 class Agent(AgentState, AgentAction):
-    def submit(self, t: Task):
+    @abstractmethod
+    def submit(self, t: Any):
         """Submit given task to execution.
         Implementations may use queue or some other sort
         of synchronozation primitive for integrity and
@@ -134,7 +115,8 @@ class Agent(AgentState, AgentAction):
         """
 
 
-class Submitter:
+class Submitter(ABC):
+    @abstractmethod
     def submit(self, action: Callable[[], None]):
         """Non-blocking method. Schedules given action
         for execution somewhere.

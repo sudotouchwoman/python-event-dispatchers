@@ -1,13 +1,39 @@
+from dataclasses import dataclass
+from enum import Enum, unique
 import logging
 import queue
 import threading
 from time import sleep
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from .types import Agent, Locations, Task, SubTask
+from agents import States
+from agents.types import Agent
+from agents.dispatcher import Dispatcher
 
-from . import States
-from .dispatcher import Dispatcher
+
+@unique
+class Locations(str, Enum):
+    BASE = "base"
+    LEVEL2 = "level 2"
+    LEVEL3 = "level 3"
+
+
+@dataclass
+class SubTask:
+    loc: Locations
+    commands: List[str]
+
+
+@dataclass
+class Task:
+    subtasks: List[SubTask]
+
+    def next(self) -> SubTask:
+        return self.subtasks.pop(0)
+
+    @property
+    def done(self) -> bool:
+        return len(self.subtasks) == 0
 
 
 class MockAgent(Agent):
@@ -128,7 +154,7 @@ class MockAgent(Agent):
         sleep(1)
         self.log.debug("sent exec")
 
-    def submit(self, t: Task):
+    def submit(self, t: Any):
         self.__task_submits.put(t)
         self.log.debug(f"submitted new task: {t}")
 
