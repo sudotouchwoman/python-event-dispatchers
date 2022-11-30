@@ -6,6 +6,10 @@ from agents.dispatcher import AgentLoop
 
 
 def main():
+    # this makes logs a bit clearer
+    t = threading.current_thread()
+    t.name = "main"
+
     loop = AgentLoop()
     mock_agent = MockAgent(loop)
     fsm = ConfiguredAgent(

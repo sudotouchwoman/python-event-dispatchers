@@ -127,7 +127,7 @@ class ConfiguredAgent(AgentFSM):
             self.log.debug("submits dest reached check")
             self.transit_state(self.submit_subtask)
             self.do_action(self.actions_api.next_subtask)
-            self.do_action(self.actions_api.check_dest_reached)
+            self.do_action(self.actions_api.update_location)
             return
         self.log.debug("task completed")
         self.transit_state(self.done_task)
@@ -163,7 +163,7 @@ class ConfiguredAgent(AgentFSM):
             return
         self.log.debug("current chunk sent, checks if reached dest")
         self.transit_state(self.dest_reached)
-        self.do_action(self.actions_api.check_dest_reached)
+        self.do_action(self.actions_api.update_location)
 
     def on_enter_executing(self):
         left = self.state_api.more_exec_actions

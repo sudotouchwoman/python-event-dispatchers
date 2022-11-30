@@ -68,7 +68,7 @@ class AgentAction(ABC):
         """
 
     @abstractmethod
-    def check_dest_reached(self):
+    def update_location(self):
         """
         Called for each subtask/chunk. Implementations MUST
         comply to an invariant: once this method completes,

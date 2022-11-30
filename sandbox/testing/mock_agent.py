@@ -130,7 +130,7 @@ class MockAgent(Agent):
             return
         self.__current_task = next_task
 
-    def check_dest_reached(self):
+    def update_location(self):
         if self.__current_subtask.loc == self.__location:
             self.log.debug("dest reached")
             return
