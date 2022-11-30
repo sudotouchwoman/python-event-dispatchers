@@ -48,6 +48,7 @@ class AgentFSM(StateMachine):
     done_subtask = new_subtask.to(new_task)
     done_task = new_task.to(idle)
     got_error = error.from_(
+        error,
         awaits_path,
         moving,
         executing,
@@ -104,13 +105,15 @@ class ConfiguredAgent(AgentFSM):
         self.log.debug("Agent done")
 
     def on_enter_idle(self):
-        self.log.debug("idle")
+        # self.log.debug("idle")
         if self.state_api.more_tasks:
             self.log.debug("fetch next task")
             self.transit_state(self.submit_task)
             return
         if self.state_api.error_found:
+            self.log.debug("error encountered")
             self.transit_state(self.got_error)
+            self.do_action(self.actions_api.listen_for_recover)
             return
         if self.state_api.must_stop:
             self.log.debug("Stops loop")
@@ -177,4 +180,10 @@ class ConfiguredAgent(AgentFSM):
         self.transit_state(self.execute_done)
 
     def on_enter_error(self):
-        self.log.debug("error found")
+        if self.state_api.error_found:
+            self.log.debug("ping for recovery")
+            self.transit_state(self.got_error)
+            self.do_action(self.actions_api.listen_for_recover)
+            return
+        self.log.debug("recovered")
+        self.transit_state(self.recover)

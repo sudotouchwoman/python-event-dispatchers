@@ -120,15 +120,35 @@ class MockAgent(Agent):
         except queue.Empty:
             self.log.debug("no tasks so far")
             return
-        self.log.debug(f"recieved task: {next_task}")
         if next_task is None:
-            self.log.info("stop listen")
-            self.must_stop = True
+            self.__shutdown_loop()
             return
         if next_task == States.ERROR:
-            self.log.error("caught error")
+            self.log.error("uncaught error!")
             return
+        self.log.debug(f"recieved task: {next_task}")
         self.__current_task = next_task
+
+    def listen_for_recover(self):
+        # blocks until recovered or timed out
+        self.error_found = True
+        try:
+            # note that all timeouts can be customized
+            signal = self.__task_submits.get(timeout=1.0)
+            self.__task_submits.task_done()
+            # this might be too simplish,
+            # but fine for a mock implementation
+            if signal != States.ERROR:
+                # just put it back
+                self.__task_submits.put(signal)
+                return
+        except queue.Empty:
+            # yet not recovered
+            return
+        if signal is None:
+            self.__shutdown_loop()
+            return
+        self.error_found = False
 
     def update_location(self):
         if self.__current_subtask.loc == self.__location:
@@ -156,9 +176,22 @@ class MockAgent(Agent):
 
     def submit(self, t: Any):
         self.__task_submits.put(t)
+        # based on provided value,
+        # write somewhat meaningful
+        # agent implementations might do
+        # simular reflection of provided t
+        # for more complicated logic
+        if t is None:
+            self.log.debug("stop signal sent")
+            return
+        if t == States.ERROR:
+            self.log.debug("recover signal sent")
+            return
         self.log.debug(f"submitted new task: {t}")
 
-    def suspend(self):
-        self.log.debug("loop stop")
+    def __shutdown_loop(self):
+        self.must_stop = True
         self.loop.stop()
-        self.log.debug("loop done")
+
+    def suspend(self):
+        self.__task_submits.put(None)

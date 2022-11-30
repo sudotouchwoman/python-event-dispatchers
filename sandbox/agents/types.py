@@ -68,6 +68,14 @@ class AgentAction(ABC):
         """
 
     @abstractmethod
+    def listen_for_recover(self):
+        """
+        Listen for recovers after getting
+        an error. May block, but
+        not forever so that error requests could be processed too.
+        """
+
+    @abstractmethod
     def update_location(self):
         """
         Called for each subtask/chunk. Implementations MUST

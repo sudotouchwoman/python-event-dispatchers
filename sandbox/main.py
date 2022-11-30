@@ -1,6 +1,6 @@
 import threading
 from time import sleep
-from agents.machine import ConfiguredAgent
+from agents.machine import ConfiguredAgent, States
 from testing.mock_agent import Locations, MockAgent, SubTask, Task
 from agents.dispatcher import AgentLoop
 
@@ -21,6 +21,15 @@ def main():
 
     def do_some_tasks():
         loop.state_submitter.submit(fsm.start)
+        sleep(3)
+        # mimic an error
+        # for mock agent, merely set corresponding predicate
+        # to True
+        mock_agent.error_found = True
+        sleep(10)
+        # this is a hack to let agent know that we recovered
+        mock_agent.submit(States.ERROR)
+        # after recovery, submit tasks
         mock_agent.submit(
             Task(
                 [
